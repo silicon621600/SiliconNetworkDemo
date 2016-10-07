@@ -7,9 +7,9 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-#define SERV_PORT 25555
-#define BACKLOG 20 //请求队列允许的最大请求数 
-#define BUF_SIZE 256
+#define SERV_PORT 25555 //服务端端口
+#define BACKLOG 20 //请求队列允许的最大请求数
+#define BUF_SIZE 256 //缓冲区大小
 
 int main(int argc,char *argv[])
 {
@@ -23,9 +23,9 @@ int main(int argc,char *argv[])
 	struct sockaddr_in host_addr;
 	struct sockaddr_in client_addr;
 	int length = sizeof client_addr;
-	
+
 	//创建套接字
-	sockfd = socket(AF_INET,SOCK_STREAM,0);
+	sockfd = socket(AF_INET,SOCK_STREAM,0); //TCP/IP协议 流的方式
 	if (sockfd == -1){
 		printf("create socket failed.\n");
 		return 0;
@@ -33,7 +33,7 @@ int main(int argc,char *argv[])
 	//绑定套接字
 	bzero(&host_addr,sizeof(host_addr));
 	host_addr.sin_family = AF_INET; //TCP/IP协议
-	host_addr.sin_port = htons(SERV_PORT); 
+	host_addr.sin_port = htons(SERV_PORT);// htons host to net
 	host_addr.sin_addr.s_addr = INADDR_ANY; //本机IP
 	ret = bind(sockfd,(struct sockaddr *)&host_addr,sizeof host_addr);
 	if (ret == -1){
