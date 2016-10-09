@@ -22,10 +22,10 @@ server.c[http://www.gnu.org/software/libc/manual/html_node/Server-Example.html#S
  ./multiClient
 ```
 
-# 设计上的问题
+# 未解决的问题
 1. 发现编写时客户端忘了写接收函数,那么send函数一直阻塞????
 2. 服务端recv时,先接受一个数据长度n,如果客户端发来的后面的数据长度没有n那么会阻塞服务端
-
+3. ubuntu下 multiClient测试 系统会出问题？？？？？
 # 编码实现中的问题
 1. OSX用gcc编译c++会出现,用g++或clang++
 ```
@@ -47,3 +47,7 @@ ld: symbol(s) not found for architecture x86_64
 
 3. 经典错误,枚举的时候删除集合中元素 导致 `segmentation fault`
 删除前先copy一份,或者 erase(iter++)
+
+
+4. ubuntu14.04下  `对‘pthread_create’未定义的引用`
+	最后链接的时候也要加-lpthread 

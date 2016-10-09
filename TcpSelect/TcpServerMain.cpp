@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <algorithm>
+#include <string.h>
 
 TcpServer tcpServer;
 void deal(ServerData serverData)
