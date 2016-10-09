@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define PORT            25555
-#define SERVERHOST      "localhost"
+//#define SERVERHOST      "localhost"
 
 void init_sockaddr (struct sockaddr_in *name,
                const char *hostname,
@@ -68,7 +68,7 @@ int main(int argc,char * argv[])
   int sock;
   struct sockaddr_in servername;
 
-  if (argc<=1){
+  if (argc<=2){
     printf("error command param.\n");
     return 0;
   }
@@ -82,7 +82,7 @@ int main(int argc,char * argv[])
     }
 
   /* Connect to the server. */
-  init_sockaddr (&servername, SERVERHOST, PORT);
+  init_sockaddr (&servername, argv[1], PORT);
   if (0 > connect (sock,
                    (struct sockaddr *) &servername,
                    sizeof (servername)))
@@ -92,7 +92,7 @@ int main(int argc,char * argv[])
     }
 
   /* Send data to the server. */
-  write_to_server (sock,argv[1]);
+  write_to_server (sock,argv[2]);
   recv_from_server(sock);
   close (sock);
   exit (EXIT_SUCCESS);
