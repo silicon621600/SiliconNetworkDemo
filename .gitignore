@@ -6,6 +6,7 @@
 *.so
 client
 server
+multiClient
 
 *.class
 
