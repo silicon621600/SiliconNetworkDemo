@@ -19,7 +19,7 @@ server.c[http://www.gnu.org/software/libc/manual/html_node/Server-Example.html#S
  gcc client.c -o client
  ./client localhost 0000000010A123456789
  gcc -lpthread multiClient.c -o multiClient
- ./multiClient
+ ./multiClient "./client localhost 0000000010A123456789"
 ```
 
 # 未解决的问题
