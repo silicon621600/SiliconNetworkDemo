@@ -4,14 +4,19 @@
 const int N = 1000;
 void* BaiJi( void* arg )
 {
-        system("./client 0000000010A123456789");
+        char * cmd = (char*) arg;
+
+        system(cmd);
         return NULL;
 }
 
 
-int main()
+int main(int argc,char * argv[])
 {
-
+        if (argc<=1){
+          printf("command param error\n");
+          return 0;
+        }
         pthread_t tidArry[N];
         pthread_attr_t attr;
 
@@ -22,7 +27,7 @@ int main()
 
         for( i =0; i<N; i++ )
         {
-                if( pthread_create( &tidArry[i], &attr, BaiJi, NULL ) )
+                if( pthread_create( &tidArry[i], &attr, BaiJi, argv[1]) )
                 {
                         printf("error\n");
                 }
