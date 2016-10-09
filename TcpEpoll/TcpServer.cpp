@@ -1,12 +1,15 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include "TcpServer.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-
+#include <stdlib.h>
+#include <errno.h>
+#include <fcntl.h>
 
 TcpServer::TcpServer()
 {
@@ -48,7 +51,7 @@ bool TcpServer::Initialize(unsigned int nPort, unsigned long dealFunc)
     sockaddr_in serverAddr = {0};
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(nPort);
-    serverAddr.sin_addr.s _addr = htonl(INADDR_ANY);
+    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
     //绑定socket
     int res = bind(m_server_socket, (sockaddr*)&serverAddr, sizeof(serverAddr));
     if(-1 == res)
@@ -69,20 +72,20 @@ bool TcpServer::Initialize(unsigned int nPort, unsigned long dealFunc)
     }
     //初始化epoll相关
     struct epoll_event event;
-    pThis->efd = epoll_create1(0);// 0 is ok????
-    if (pThis->efd==-1){
+    efd = epoll_create1(0);// 0 is ok????
+    if (efd==-1){
         perror("epoll_create1");
         return 0;
     }
-    event.data.fd = pThis->m_server_socket;
+    event.data.fd = m_server_socket;
     event.events = EPOLLIN | EPOLLET;// 读 和边缘模式
-    s = epoll_ctl(pThis->efd,EPOLL_CTL_ADD,pThis->m_server_socket,&event);
+    int s = epoll_ctl(efd,EPOLL_CTL_ADD,m_server_socket,&event);
     if (s==-1){
         perror("epoll_ctl");
         return 0;
     }
     /* Buffer where events are returned */
-    pThis->events = calloc(MAXEVENTS,sizeof event);
+    events = (struct epoll_event *)calloc(MAXEVENTS,sizeof event);
 
 
     //创建线程接收socket连接
@@ -120,6 +123,7 @@ void * TcpServer::AcceptThread(void * pParam)
         n = epoll_wait(pThis->efd,pThis->events,MAXEVENTS,-1);//等待事件发生 -1 表示阻塞
         for (i=0;i<n;i++)
         {
+          printf("pThis->events[%d].data.fd: %d\n",i,pThis->events[i].data.fd);
           if ((pThis->events[i].events & EPOLLERR) ||
               (pThis->events[i].events & EPOLLHUP) ||
               (!(pThis->events[i].events & EPOLLIN)))
@@ -139,10 +143,12 @@ void * TcpServer::AcceptThread(void * pParam)
                   struct sockaddr in_addr;
                   socklen_t in_len;
                   int infd;
-                  char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
+		  char hbuf[NI_MAXHOST],sbuf[NI_MAXSERV];
+		  int s;
+		  struct epoll_event event;
 
                   in_len = sizeof in_addr;
-                  infd = accept (sfd, &in_addr, &in_len);
+                  infd = accept (pThis->m_server_socket, &in_addr, &in_len);
                   if (infd == -1)
                   {
                       if ((errno == EAGAIN) ||
@@ -171,26 +177,26 @@ void * TcpServer::AcceptThread(void * pParam)
 
                   /* Make the incoming socket non-blocking and add it to the
                      list of fds to monitor. */
-                  s = make_socket_non_blocking (infd);
+                  s = pThis->make_socket_non_blocking (infd);
                   if (s == -1)
                   {
                       return 0; //只结束当前线程
                   }
 
-                  struct epoll_event event;
+                  
                   event.data.fd = infd;
                   event.events = EPOLLIN | EPOLLET;
-                  s = epoll_ctl (pThis->efd, EPOLL_CTL_ADD, infd, &(pThis->event));
+                  s = epoll_ctl (pThis->efd, EPOLL_CTL_ADD, infd, &event);
                   if (s == -1)
                   {
-                      perror ("epoll_ctl (pThis->efd, EPOLL_CTL_ADD, infd, &(pThis->event))");
+                      perror ("epoll_ctl (pThis->efd, EPOLL_CTL_ADD, infd, &event)");
                       return 0;
                   }
                   //添加新连接的客户
                   ServerData sd = {0};
-                  sd.sockfd = fd;
+                  sd.sockfd = infd;
                   sd.remainDataLen = -1;
-                  pThis->m_client.insert(std::make_pair(fd,sd));
+                  pThis->m_client.insert(std::make_pair(infd,sd));
               }
               continue;
           }else
@@ -200,9 +206,9 @@ void * TcpServer::AcceptThread(void * pParam)
                  completely, as we are running in edge-triggered mode
                  and won't get a notification again for the same
                  data. */
+	
 
-
-              map<int,ServerData>::iterator iter = pThis->m_client.find(pThis->events[i].data.fd);
+              std::map<int,ServerData>::iterator iter = pThis->m_client.find(pThis->events[i].data.fd);
               if (iter == pThis->m_client.end()){
                 fprintf(stderr, "cannot find ServerData of %d\n", pThis->events[i].data.fd);//理论上应该不可能出现这种情况
                 return 0;
@@ -215,13 +221,16 @@ void * TcpServer::AcceptThread(void * pParam)
                  pthread_mutex_lock(&pThis->m_mutex);
                  pThis->m_data.push_back(iter->second);
                  pthread_mutex_unlock(&pThis->m_mutex);
+                 //移出m_client map
+                 pThis->m_client.erase(pThis->events[i].data.fd);
                  //使epoll放弃监听
-                 ret = epoll_ctl (pThis->efd, EPOLL_CTL_DEL, iter->first, &(pThis->events[i]));
+                 int ret = epoll_ctl (pThis->efd, EPOLL_CTL_DEL, iter->first, &(pThis->events[i]));
                  if (ret){
                       perror ("epoll_ctl");
+                      printf("epoll_ctl %m XXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
                  }
               }
-
+          }
         }
     }
 }
@@ -229,61 +238,102 @@ void * TcpServer::AcceptThread(void * pParam)
 
 bool TcpServer::RecvData(ServerData * sd)
 {
-  int done = 0;
   int t;
-  char buf[BUF_SIZE];
+  int count,buflen;
+  char buf[BUF_SIZE*2],tempBuf[BUF_SIZE];
+  printf("读时serverData: [%s] %d %d\n",sd->data,sd->remainDataLen,sd->sockfd);
   while (1){
+  
+  
+    int flag=0;
+    
     bzero(buf,sizeof buf);
-    if (sd->remainDataLen == -1){
-      t = 10;
-    }else{
-      t = sd->remainDataLen>BUF_SIZE?BUF_SIZE:s->remainDataLen;
-    }
-    count = recv(sd.sockfd, buf, t,0);
-    if (count == -1)
-      {
-        /* If errno == EAGAIN, that means we have read all
-           data. So go back to the main loop. */
-        if (errno != EAGAIN)
-          {
-            perror ("read");
-            strcpy(sd->data,"1|read error!");
-            sd->remainDataLen = -2;
-            done = 1;
-          }
-        break;
-      }
-    else if (count == 0)
+    buflen = 0;
+    //读出一个buf来
+    while (1)
     {
-        /* End of file. The remote has closed the
-           connection. */
-        strcpy(sd->data,"1|read error!");
-        sd->remainDataLen = -2;
-        done = 1;
-        break;
+    	count = recv(sd->sockfd,tempBuf,sizeof tempBuf,0);
+    	if (count<0){
+    		if (errno != EAGAIN){
+    			//错误
+    			perror("recv error");
+    			flag = 1;
+    			break;
+    		}else{
+	    		//正常 暂时没有数据了
+    			flag = 2;
+    			break;
+    		}
+    	}else if (count==0){
+    		//到达文件末 客户端关闭了连接
+    		flag = 3;
+    		break;
+    	}
+    	strncpy(buf,tempBuf,count);
+    	buflen += count;
+    	if (buflen>BUF_SIZE){
+    		//可以先处理了
+    		break;
+    	}
     }
-    if (sd->remainDataLen==-1){
-      int n;
-      if (sscanf(buf,"%d",&n)!=1){
-        printf("can not read data length!");
-        strcpy(sd->data,"1|can not read data length!");
-        sd->remainDataLen = -2;
-        return false;
-      }
-      if (n>MAX_RECV_DATA_LEN){
-        printf("data length exceed limit");
-        strcpy(sd->data,"1|data length exceed limit");
-        sd->remainDataLen = -2;
-        return false;
-      }
-      sd->remainDataLen = n;
+   
+    if (flag==1){
+	    strcpy(sd->data,"1|read error!errno != EAGAIN");
+            sd->remainDataLen = -2;
+            return false;
+    }
+    for (int i=0;i<buflen;i++)
+    	if (buf[i]=='\0') buf[i]=' ';//\0 替换成空格
+    if (sd->remainDataLen == -1){
+    	//还未确定数据长度
+    	int l = strlen(sd->data);
+    	if (l+buflen>=10){
+    		strncat(sd->data,buf,10-l);
+    		int n;
+		if (sscanf(sd->data,"%d",&n)!=1){
+	        printf("can not read data length!");
+        	strcpy(sd->data,"1|can not read data length!");
+        	sd->remainDataLen = -2;
+        	return false;
+      		}
+      		if (n>MAX_RECV_DATA_LEN){
+        		printf("data length exceed limit");
+		        strcpy(sd->data,"1|data length exceed limit");
+		        sd->remainDataLen = -2;
+		        return false;
+		}
+		int tn = buflen-(10-l);
+		int tt = tn>n?n:tn;
+	      	strncpy(sd->data,buf+10-l+1,tt);
+	      	sd->data[tt+1]=0;
+	        sd->remainDataLen = n-tt;
+    	}else{
+    		//需要继续读
+    		strncat(sd->data,buf,10-l);
+    		if (flag==3)
+    		{
+    			strcpy(sd->data,"1|read error!socket closed");
+		        sd->remainDataLen = -2;
+            		return false;
+    		}
+    	}
     }else{
-      sd->remainDataLen -= t;
-      strncat((char*)sd->data,buf,t);//(char*) ok???
+	int tt = buflen>sd->remainDataLen?sd->remainDataLen:buflen;
+	strncat(sd->data,buf,tt);
+	sd->data[tt+1]=0;
+	sd->remainDataLen -= tt;
+	if (sd->remainDataLen>0 && flag==3)    
+	{
+    		strcpy(sd->data,"1|read error!socket closed");
+		sd->remainDataLen = -2;
+            	return false;
+    	}
     }
-
+    if (flag==2 || flag==3){
+    	break;
+    }
   }
-  return !done;
+  return  true;
 }
 
 //发送数据到指定的socket
@@ -294,13 +344,33 @@ bool TcpServer::SendData(const char * buf, size_t len, int sockfd)
         return false;
     }
     printf("开始发送\n");
-    int res = send(sockfd, buf, len, 0);
-    printf("发送完毕\n");
-    if(-1 == res)
-    {
-        printf("send error:%m\n");
-        return false;
+    //由于sockfd是非阻塞的，所以发送也必须改成循环发送
+    int t ,s=0;
+    while (1){
+	t=send(sockfd, buf+s, len, 0);    
+	if (t<0){
+	    if (t==EINTR || t==EWOULDBLOCK || errno==EAGAIN){
+	    	//正常
+	    }else{
+	    	 printf("send error:%m\n");
+	    	 return false;
+	    }
+	}else if (t==0){
+		//连接关闭
+		printf("send. connection closed\n");
+		return false;
+	}else {
+	   s+=t;
+	   len-=t;
+	   if (len==0){
+	   	//发完了
+	   	break;
+	   }
+	}
     }
+
+    printf("发送完毕\n");
+    
     return true;
 }
 
@@ -322,8 +392,7 @@ void * TcpServer::ManageThread(void * pParam)
         pthread_mutex_unlock(&pThis->m_mutex);
         if(nCount > 0)
         {
-            pid = 0;
-            printf("创建处理线程\n");
+            pid = 0;           
             //创建处理线程
             if( 0 != pthread_create(&pid, NULL, OperatorThread, pParam))
             {
@@ -349,6 +418,7 @@ void * TcpServer::OperatorThread(void * pParam)
         //每次只处理一个ServerData
         ServerData data = pThis->m_data.front();
         pThis->m_data.pop_front();
+        printf("处理线程中serverData: [%s] %d %d\n",data.data,data.remainDataLen,data.sockfd);
         if(pThis->m_operaFunc)
         {
             //把数据交给回调函数处理
@@ -358,7 +428,7 @@ void * TcpServer::OperatorThread(void * pParam)
     pthread_mutex_unlock(&pThis->m_mutex);
     return NULL;
 }
-int make_socket_non_blocking(int sockfd)
+int TcpServer::make_socket_non_blocking(int sockfd)
 {
   int flags, s;
 
@@ -381,8 +451,10 @@ int make_socket_non_blocking(int sockfd)
 }
 bool TcpServer::UnInitialize()
 {
+    free(events);
     //close 是关闭文件
     close(m_server_socket);
+
     for(std::map<int,ServerData>::iterator iter = m_client.begin(); iter != m_client.end(); ++iter)
     {
         close(iter->first);

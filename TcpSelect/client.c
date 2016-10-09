@@ -31,9 +31,9 @@ void init_sockaddr (struct sockaddr_in *name,
 void write_to_server (int filedes,char* msg)
 {
   int nbytes;
-
-  nbytes = write (filedes, msg, strlen(msg) + 1);
-  printf("send data:%s\n",msg);
+  int l = strlen(msg);
+  nbytes = write (filedes, msg, l);
+  printf("send data:[%s] %d\n",msg,l);
   if (nbytes < 0)
     {
       perror ("write");
@@ -49,6 +49,7 @@ void recv_from_server(int sockfd)
   while (1){
     bzero(buf,sizeof buf);
     t = recv(sockfd,buf,sizeof buf,0);
+    printf("t:%d [%s]\n",t,buf);
     if (t<0){
       perror("recv error");
       break;

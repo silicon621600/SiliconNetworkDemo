@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <algorithm>
+#include <string.h>
+
 
 TcpServer tcpServer;
 void deal(ServerData serverData)
@@ -16,6 +18,7 @@ void deal(ServerData serverData)
         tcpServer.SendData(serverData.data, len , serverData.sockfd);
         //别忘了关闭!!!
         close(serverData.sockfd);
+        printf("SendData:%s\n",res);
         return ;
     }
     std::reverse(serverData.data,serverData.data+len);
