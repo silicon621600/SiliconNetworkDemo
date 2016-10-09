@@ -7,7 +7,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <string.h>
-
+#include <pthread.h>
 #define PORT            25555
 //#define SERVERHOST      "localhost"
 
@@ -62,23 +62,19 @@ void recv_from_server(int sockfd)
   printf("recv data:%s\n",ret);
 }
 
-int main(int argc,char * argv[])
+void * deal(void * arg)
 {
-
+  char ** argv =(char **)arg;
   int sock;
   struct sockaddr_in servername;
 
-  if (argc<=2){
-    printf("error command param.\n");
-    return 0;
-  }
 
   /* Create the socket. */
   sock = socket (PF_INET, SOCK_STREAM, 0);
   if (sock < 0)
     {
       perror ("socket (client)");
-      exit (EXIT_FAILURE);
+        return NULL;
     }
 
   /* Connect to the server. */
@@ -88,12 +84,51 @@ int main(int argc,char * argv[])
                    sizeof (servername)))
     {
       perror ("connect (client)");
-      exit (EXIT_FAILURE);
+      return NULL;
     }
 
   /* Send data to the server. */
   write_to_server (sock,argv[2]);
   recv_from_server(sock);
   close (sock);
-  exit (EXIT_SUCCESS);
+  return NULL;
+}
+int main(int argc,char * argv[])
+{
+	int n;
+	if (argc<3){
+	  printf("command param must be this format: \"host datastring [threadNum=1]\"\n");
+	  return 0;
+	}
+	if (argc>=4){
+		n = atoi(argv[3]);
+		if ( n==0 || n>20000){
+			printf("command param error\n");
+			return ;
+		}
+	}else{
+	     n = 1; 
+	}
+	pthread_t tidArry[20000];
+	pthread_attr_t attr;
+
+	pthread_attr_init( &attr );
+	pthread_attr_setstacksize( &attr, 1024 );
+
+	int i;
+
+	for( i =0; i<n; i++ )
+	{
+		if( pthread_create( &tidArry[i], &attr, deal, argv) )
+		{
+		        printf("error\n");
+		}
+
+	}
+
+	for( i=0; i<n; i++ )
+	{
+		pthread_join( tidArry[i], NULL );
+	}
+	return 0;
 }

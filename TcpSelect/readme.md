@@ -26,7 +26,11 @@ server.c[http://www.gnu.org/software/libc/manual/html_node/Server-Example.html#S
 1. 发现编写时客户端忘了写接收函数,那么send函数一直阻塞????
 2. 服务端recv时,先接受一个数据长度n,如果客户端发来的后面的数据长度没有n那么会阻塞服务端
 3. ubuntu下 multiClient测试 系统会卡死
-  但是在OSX没有这个问题
+  但是在OSX没有这个问题.
+  原因在于multiClient代码里创建的线程使用system调用的client程序。
+  ubuntu线程可以很多，但是没法一下创建大量进程。
+  不清楚OSX是怎么回事，但是不打算实验
+  
 # 编码实现中的问题
 1. OSX用gcc编译c++会出现,用g++或clang++
 ```

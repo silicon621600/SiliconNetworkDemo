@@ -4,9 +4,9 @@
 
 *.o
 *.so
+# notice!!!!! this may be ignore "client" directory
 client
 server
-multiClient
 test
 
 *.class
