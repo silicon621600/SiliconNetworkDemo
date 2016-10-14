@@ -1,15 +1,16 @@
 
+#include "TcpServer.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include "TcpServer.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <time.h>
 
 TcpServer::TcpServer()
 {
@@ -116,11 +117,35 @@ void * TcpServer::AcceptThread(void * pParam)
     }
     TcpServer * pThis = (TcpServer*)pParam;
 
-
+    time_t minStartTime = time(NULL);
     while (1)
     {
         int n,i;
-        n = epoll_wait(pThis->efd,pThis->events,MAXEVENTS,-1);//等待事件发生 -1 表示阻塞
+        //进入epoll_wait前先关闭那些超时的连接（具体读入数据超时） 效率？？？
+        if (difftime(time(NULL),minStartTime)>MAX_CONN_TIME)
+	{           
+		minStartTime = time(NULL);
+		std::map<int,ServerData>::iterator iter;
+	        for (iter=pThis->m_client.begin();iter!=pThis->m_client.end();){
+		        int flag = 1;
+        		double diffTime = difftime(time(NULL),iter->second.startTime);
+        		if (diffTime>MAX_CONN_TIME)
+        		{
+        			char msg[255] = "1|read data timeout.";
+        			pThis->SendData(msg,strlen(msg),iter->first);
+        			if (close(iter->first)){
+        				perror("close timeout connection error");
+        			}
+        			pThis->m_client.erase(iter++);
+        		}else{
+        			if (iter->second.startTime<minStartTime){
+        				minStartTime = iter->second.startTime;
+        			}
+        			iter++;
+        		}        	
+       		 }
+        }
+        n = epoll_wait(pThis->efd,pThis->events,MAXEVENTS,20);//等待事件发生,20ms -1 表示阻塞
         for (i=0;i<n;i++)
         {
           printf("pThis->events[%d].data.fd: %d\n",i,pThis->events[i].data.fd);
@@ -137,7 +162,7 @@ void * TcpServer::AcceptThread(void * pParam)
           {
             /* We have a notification on the listening socket, which
              means one or more incoming connections. */
-             //连接可能有一个或者多个
+             //新连接可能有一个或者多个
              while (1)
              {
                   struct sockaddr in_addr;
@@ -196,6 +221,7 @@ void * TcpServer::AcceptThread(void * pParam)
                   ServerData sd = {0};
                   sd.sockfd = infd;
                   sd.remainDataLen = -1;
+                  sd.startTime = time(NULL);
                   pThis->m_client.insert(std::make_pair(infd,sd));
               }
               continue;
@@ -227,7 +253,6 @@ void * TcpServer::AcceptThread(void * pParam)
                  int ret = epoll_ctl (pThis->efd, EPOLL_CTL_DEL, iter->first, &(pThis->events[i]));
                  if (ret){
                       perror ("epoll_ctl");
-                      printf("epoll_ctl %m XXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
                  }
               }
           }

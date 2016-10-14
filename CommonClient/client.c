@@ -76,7 +76,7 @@ void * deal(void * arg)
       perror ("socket (client)");
         return NULL;
     }
-
+  
   /* Connect to the server. */
   init_sockaddr (&servername, argv[1], PORT);
   if (0 > connect (sock,
@@ -121,7 +121,7 @@ int main(int argc,char * argv[])
 	{
 		if( pthread_create( &tidArry[i], &attr, deal, argv) )
 		{
-		        printf("error\n");
+		        perror("pthread_create error");
 		}
 
 	}
