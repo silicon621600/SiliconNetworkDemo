@@ -329,8 +329,8 @@ bool TcpServer::RecvData(ServerData * sd)
 		}
 		int tn = buflen-(10-l);
 		int tt = tn>n?n:tn;
-	      	strncpy(sd->data,buf+10-l+1,tt);
-	      	sd->data[tt+1]=0;
+	      	strncpy(sd->data,buf+10-l,tt);
+	      	sd->data[tt]=0;
 	        sd->remainDataLen = n-tt;
     	}else{
     		//需要继续读
