@@ -8,8 +8,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <pthread.h>
-#define PORT            25555
-//#define SERVERHOST      "localhost"
+int port  =    25555;
 
 void init_sockaddr (struct sockaddr_in *name,
                const char *hostname,
@@ -78,7 +77,7 @@ void * deal(void * arg)
     }
   
   /* Connect to the server. */
-  init_sockaddr (&servername, argv[1], PORT);
+  init_sockaddr (&servername, argv[1], port);
   if (0 > connect (sock,
                    (struct sockaddr *) &servername,
                    sizeof (servername)))
@@ -95,19 +94,24 @@ void * deal(void * arg)
 }
 int main(int argc,char * argv[])
 {
-	int n;
+	int n =1;
 	if (argc<3){
 	  printf("command param must be this format: \"host datastring [threadNum=1]\"\n");
 	  return 0;
 	}
 	if (argc>=4){
-		n = atoi(argv[3]);
-		if ( n==0 || n>20000){
-			printf("command param error\n");
+		port = atoi(argv[3]);
+		if (n<=0 || n>65535)
+		{
+			printf("command param port error.\n");
+		} 
+	}
+	if (argc>=5){
+		n = atoi(argv[4]);
+		if ( n<=0 || n>20000){
+			printf("command param thread number error.\n");
 			return ;
 		}
-	}else{
-	     n = 1; 
 	}
 	pthread_t tidArry[20000];
 	pthread_attr_t attr;
